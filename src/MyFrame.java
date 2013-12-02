@@ -100,8 +100,7 @@ public class MyFrame extends JFrame implements ActionListener {
 		
 		int pageCount = 0; 
 		int overallItemCount = 0; 
-		int itemsInPage = 60; 
-		int itemsWithLargeDownloads = 0; 
+		int itemsInPage = 60;
 		int max = Integer.parseInt(maxDownloadsText.getText());
         int offsetCount = Integer.parseInt(offsetText.getText());
 		
@@ -120,25 +119,16 @@ public class MyFrame extends JFrame implements ActionListener {
 				overallItemCount++; 
 				String itemXml = result.substring(itemStartIndex, itemEndIndex); 
 				DeviantArtItem daItem = new DeviantArtItem(itemXml); 
-							
-				/*
-				System.out.println("Title = " + daItem.getTitle()); 
-				System.out.println("Media title = " + daItem.getMediaTitle()); 
-				System.out.println("Link = " + daItem.getLink());				
-				System.out.println("Author = " + daItem.getAuthor()); 
-				System.out.println("Category = " + daItem.getCategory()); 
-				System.out.println("Full category = " + daItem.getFullCategory()); 
-				System.out.println("URL = " + daItem.getDownloadUrl()); 
-				System.out.println("Filename = " + daItem.getFilename()); 
-				*/
 
                 if (overallItemCount >= offsetCount) {
                     statusLabel.setText("downloading file " + overallItemCount);
                     wget.downloadFile(daItem.getDownloadUrl(), downloadPathText.getText() + "/" + daItem.getAuthor() + "/" + daItem.getFilename());
                     try {
                         Thread.sleep(pause);
-                    } catch (InterruptedException e1) {
-                        e1.printStackTrace();  //To change body of catch statement use File | Settings | File Templates.
+                    } catch (InterruptedException ex) {
+                        System.out.println("error pausing");
+                        System.out.println(" pause: " + pause);
+                        System.out.println(" error: " + ex.getMessage());
                     }
                 }
 
@@ -150,11 +140,9 @@ public class MyFrame extends JFrame implements ActionListener {
 			}
 
 			if (max > 0 && overallItemCount - offsetCount >= max) break;
-			//if (pageCount > 1)
-			//	break; 
 		}
 	
-		statusLabel.setText("downloaded " + overallItemCount + " items");	
+		statusLabel.setText("downloaded " + (overallItemCount - offsetCount) + " items");
 		downloadButton.setEnabled(true); 
 	}
 }
@@ -168,7 +156,7 @@ class Terminator extends WindowAdapter {
 class Wget {
 	
 	public void downloadFile(String urlToDownload, String fileToSaveAs) {
-		System.out.println("downloading " + urlToDownload); 				
+		//System.out.println("downloading " + urlToDownload);
 		//System.out.println("to " + fileToSaveAs); 				
 		try {
 			File directory = new File(fileToSaveAs.substring(0, fileToSaveAs.lastIndexOf("/"))); 
@@ -180,7 +168,10 @@ class Wget {
 		    fos.getChannel().transferFrom(rbc, 0, 1 << 24);
 		}
 		catch(Exception e) {
-			System.out.println("ERROR - " + e.getMessage()); 
+            System.out.println("ERROR downloading file");
+            System.out.println("   url: " + urlToDownload);
+			System.out.println("    to: " + fileToSaveAs);
+            System.out.println(" error: " + e.getMessage());
 		}
 	}
 
