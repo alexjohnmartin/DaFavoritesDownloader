@@ -14,7 +14,8 @@ public class MyFrame extends JFrame implements ActionListener {
 	TextField maxDownloadsText;
     TextField offsetText;
     TextField pauseText;
-
+    Checkbox autoStopCheckbox;
+    final int AutoStopExistingImagesCount = 10;
 	
 	public MyFrame() {
 		this.getContentPane().setLayout(null); 
@@ -44,14 +45,41 @@ public class MyFrame extends JFrame implements ActionListener {
 		usernameText.setText("alexjohnmartin"); 
 		this.getContentPane().add(usernameText); 
 		
-		Label maxDownloadsLabel = new Label(); 
-		maxDownloadsLabel.setText("max downloads (0 = unlimited)"); 
-		maxDownloadsLabel.setBounds(20, 110, 360, 20);
+		Label maxDownloadsLabel = new Label();
+		maxDownloadsLabel.setText("max downloads");
+		maxDownloadsLabel.setBounds(20, 110, 160, 20);
 		this.getContentPane().add(maxDownloadsLabel); 
 		maxDownloadsText = new TextField(); 
-		maxDownloadsText.setBounds(20, 130, 360, 20);
+		maxDownloadsText.setBounds(20, 130, 160, 20);
 		maxDownloadsText.setText("0"); 
 		this.getContentPane().add(maxDownloadsText);
+
+        Label autoStopDownloadsLabel = new Label();
+        autoStopDownloadsLabel.setText("auto-stop");
+        autoStopDownloadsLabel.setBounds(210, 110, 180, 20);
+        this.getContentPane().add(autoStopDownloadsLabel);
+        autoStopCheckbox = new Checkbox();
+        autoStopCheckbox.setState(true);
+        autoStopCheckbox.setBounds(240, 130, 160, 20);
+        autoStopCheckbox.addMouseListener(new MouseListener() {
+                                                      @Override
+                                                      public void mouseClicked(MouseEvent mouseEvent) {
+                                                          maxDownloadsText.setEnabled(autoStopCheckbox.getState());
+                                                      }
+
+                                                      @Override
+                                                      public void mousePressed(MouseEvent mouseEvent) { }
+
+                                                      @Override
+                                                      public void mouseReleased(MouseEvent mouseEvent) { }
+
+                                                      @Override
+                                                      public void mouseEntered(MouseEvent mouseEvent) { }
+
+                                                      @Override
+                                                      public void mouseExited(MouseEvent mouseEvent) { }
+                                                  });
+        this.getContentPane().add(autoStopCheckbox);
 
         Label offsetLabel = new Label();
         offsetLabel.setText("download offset (start at index X)");
@@ -97,7 +125,8 @@ public class MyFrame extends JFrame implements ActionListener {
 
 		downloadButton.setEnabled(false); 
 		Wget wget = new Wget(); 
-		
+
+        int existingImagesCount = 0;
 		int pageCount = 0; 
 		int overallItemCount = 0; 
 		int itemsInPage = 60;
@@ -106,40 +135,48 @@ public class MyFrame extends JFrame implements ActionListener {
 		
 		while (itemsInPage > 0) {
 			itemsInPage = 0; 
-			pageCount++; 
-			statusLabel.setText("getting page " + pageCount); 
-			String result = wget.getHTML("http://backend.deviantart.com/rss.xml?q=favby%3A" + usernameText.getText() + "&offset=" + overallItemCount);
-			
-			int itemStartIndex = result.indexOf("<item>"); 
-			int itemEndIndex = result.indexOf("</item>") + 7;
-            long pause = Long.parseLong(pauseText.getText());
+			pageCount++;
 
-			while (itemStartIndex >= 0) {
-				itemsInPage++;
-				overallItemCount++; 
-				String itemXml = result.substring(itemStartIndex, itemEndIndex); 
-				DeviantArtItem daItem = new DeviantArtItem(itemXml); 
+//            if (offsetCount < pageCount * itemsInPage) {
+                statusLabel.setText("getting page " + pageCount);
+                String result = wget.getHTML("http://backend.deviantart.com/rss.xml?q=favby%3A" + usernameText.getText() + "&offset=" + overallItemCount);
 
-                if (overallItemCount >= offsetCount) {
-                    statusLabel.setText("downloading file " + overallItemCount);
-                    wget.downloadFile(daItem.getDownloadUrl(), downloadPathText.getText() + "/" + daItem.getAuthor() + "/" + daItem.getFilename());
-                    try {
-                        Thread.sleep(pause);
-                    } catch (InterruptedException ex) {
-                        System.out.println("error pausing");
-                        System.out.println(" pause: " + pause);
-                        System.out.println(" error: " + ex.getMessage());
+                int itemStartIndex = result.indexOf("<item>");
+                int itemEndIndex = result.indexOf("</item>") + 7;
+                long pause = Long.parseLong(pauseText.getText());
+
+                while (itemStartIndex >= 0 && existingImagesCount < AutoStopExistingImagesCount) {
+                    itemsInPage++;
+                    overallItemCount++;
+                    String itemXml = result.substring(itemStartIndex, itemEndIndex);
+                    DeviantArtItem daItem = new DeviantArtItem(itemXml);
+
+                    if (overallItemCount >= offsetCount) {
+                        statusLabel.setText("downloading file " + overallItemCount);
+                        boolean fileExists = wget.downloadFile(daItem.getDownloadUrl(), downloadPathText.getText() + "/" + daItem.getAuthor() + "/" + daItem.getFilename());
+                        if (fileExists && autoStopCheckbox.getState()) { existingImagesCount++; } else { existingImagesCount = 0; }
+                        if (existingImagesCount >= AutoStopExistingImagesCount) {
+                            System.out.println("auto-stopping after " + AutoStopExistingImagesCount + " existing images");
+                            break;
+                        }
+                        try {
+                            Thread.sleep(pause);
+                        } catch (InterruptedException ex) {
+                            System.out.println("error pausing");
+                            System.out.println(" pause: " + pause);
+                            System.out.println(" error: " + ex.getMessage());
+                        }
                     }
+
+                    result = result.substring(itemEndIndex);
+                    itemEndIndex = result.indexOf("</item>") + 7;
+                    itemStartIndex = result.indexOf("<item>");
+
+                    if (max > 0 && overallItemCount - offsetCount >= max) break;
                 }
 
-				result = result.substring(itemEndIndex); 
-				itemEndIndex = result.indexOf("</item>") + 7; 
-				itemStartIndex = result.indexOf("<item>");
-				
-				if (max > 0 && overallItemCount - offsetCount >= max) break;
-			}
-
-			if (max > 0 && overallItemCount - offsetCount >= max) break;
+                if (max > 0 && overallItemCount - offsetCount >= max && existingImagesCount >= AutoStopExistingImagesCount) break;
+//            }
 		}
 	
 		statusLabel.setText("downloaded " + (overallItemCount - offsetCount) + " items");
@@ -155,23 +192,31 @@ class Terminator extends WindowAdapter {
 
 class Wget {
 	
-	public void downloadFile(String urlToDownload, String fileToSaveAs) {
-		//System.out.println("downloading " + urlToDownload);
-		//System.out.println("to " + fileToSaveAs); 				
+	public boolean downloadFile(String urlToDownload, String fileToSaveAs) {
 		try {
-			File directory = new File(fileToSaveAs.substring(0, fileToSaveAs.lastIndexOf("/"))); 
+            File saveFile = new File(fileToSaveAs);
+            if (saveFile.exists()) {
+                System.out.println("file already exists: " + fileToSaveAs);
+                return true;
+            }
+            System.out.println("downloading " + urlToDownload);
+            //System.out.println("to " + fileToSaveAs);
+
+            File directory = new File(fileToSaveAs.substring(0, fileToSaveAs.lastIndexOf("/")));
 			if (!directory.exists()) { directory.mkdirs(); }
 			
 			URL website = new URL(urlToDownload);
 		    ReadableByteChannel rbc = Channels.newChannel(website.openStream());
 		    FileOutputStream fos = new FileOutputStream(fileToSaveAs);
 		    fos.getChannel().transferFrom(rbc, 0, 1 << 24);
+            return false;
 		}
 		catch(Exception e) {
             System.out.println("ERROR downloading file");
             System.out.println("   url: " + urlToDownload);
 			System.out.println("    to: " + fileToSaveAs);
             System.out.println(" error: " + e.getMessage());
+            return false;
 		}
 	}
 
